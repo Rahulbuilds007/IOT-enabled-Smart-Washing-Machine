@@ -197,7 +197,7 @@ python inference_server.py
 
 ---
 
-## 👨‍💻 My Contribution (Rahul Chawla)
+## 👨‍💻 My Contribution
 
 I worked extensively on **hardware integration, system control, and Raspberry Pi-based deployment**, including:
 
@@ -228,7 +228,7 @@ I worked extensively on **hardware integration, system control, and Raspberry Pi
 * Handled **serial protocol and synchronization**
 * Performed system debugging and testing
 
-### 🖥️ Raspberry Pi (Your extra contribution 🔥)
+### 🖥️ Raspberry Pi
 
 * Setup Raspberry Pi OS and environment
 * Helped run:
