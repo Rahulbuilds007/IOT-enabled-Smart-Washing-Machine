@@ -1,0 +1,358 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ProWash Slider Control</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        /* --- FONTS & VARS --- */
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Roboto:wght@300;400;500;700&display=swap');
+
+        :root {
+            --bg-body: #181818;
+            --bg-panel: #0e0e0e;
+            --led-blue: #00e5ff;
+            --led-auto: #bf00ff;
+            --led-red: #ff3333;
+            --text-gray: #555;
+            --text-light: #ddd;
+        }
+
+        body {
+            background: var(--bg-body);
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; margin: 0; font-family: 'Roboto', sans-serif;
+            user-select: none; overflow: hidden; color: white;
+        }
+
+        /* --- MAIN PANEL --- */
+        .panel {
+            background: var(--bg-panel);
+            width: 900px; height: 450px;
+            border-radius: 35px; padding: 35px;
+            box-shadow: inset 0 0 40px #000, 0 30px 80px rgba(0,0,0,0.8);
+            display: grid; grid-template-columns: 1.6fr 1fr;
+            gap: 40px; border: 3px solid #222;
+            position: relative; overflow: hidden;
+        }
+
+        /* --- LEFT SIDE: SLIDERS --- */
+        .left-section { display: flex; flex-direction: column; gap: 15px; height: 100%; }
+
+        /* LCD AREA */
+        .lcd-area {
+            display: flex; flex-direction: column; 
+            justify-content: flex-end; 
+            margin-bottom: 5px; height: 85px; border-bottom: 1px solid #222; padding-bottom: 10px;
+        }
+
+        .lcd-top-row {
+            display: flex; justify-content: space-between; align-items: flex-end; width: 100%;
+        }
+        
+        .status-text {
+            color: var(--text-light); font-size: 1.4rem;
+            font-family: 'Roboto Mono', monospace; letter-spacing: 2px;
+        }
+
+        .timer-box {
+            color: var(--led-blue); font-family: 'Roboto Mono', monospace;
+            font-size: 4.5rem; line-height: 0.9; text-shadow: 0 0 15px var(--led-blue);
+        }
+
+        /* PROGRESS BAR */
+        .progress-track {
+            width: 100%; height: 6px; background: #1a1a1a;
+            border-radius: 3px; margin-top: 5px; overflow: hidden;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.8);
+        }
+        .progress-fill {
+            height: 100%; width: 0%; 
+            background: var(--led-blue);
+            transition: width 1s linear; /* Smooth movement */
+            box-shadow: 0 0 10px var(--led-blue);
+        }
+        .panel.auto-mode .progress-fill { background: var(--led-auto); box-shadow: 0 0 10px var(--led-auto); }
+
+
+        /* SLIDER GRID */
+        .settings-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); 
+            gap: 15px; height: 100%; padding-top: 10px;
+        }
+
+        .col {
+            display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+            background: #111; border-radius: 15px; padding: 15px 5px; border: 1px solid #222;
+        }
+
+        /* CUSTOM VERTICAL RANGE SLIDER */
+        input[type=range][orient=vertical] {
+            writing-mode: bt-lr; /* IE */
+            -webkit-appearance: slider-vertical; /* Webkit */
+            width: 40px; height: 160px;
+            padding: 0 5px;
+            opacity: 0.8; cursor: pointer;
+            accent-color: var(--led-blue); /* Modern browser support */
+        }
+        
+        .panel.auto-mode input[type=range] { accent-color: var(--led-auto); cursor: not-allowed; }
+        .panel.auto-mode .timer-box { color: var(--led-auto); text-shadow: 0 0 15px var(--led-auto); }
+
+        .setting-label {
+            font-size: 0.85rem; color: var(--text-light); font-weight: bold; text-transform: uppercase; margin-top: 10px;
+        }
+        
+        .setting-value {
+            font-size: 0.75rem; color: var(--led-blue); height: 20px; font-weight: bold; text-shadow: 0 0 5px rgba(0, 229, 255, 0.5);
+        }
+        .panel.auto-mode .setting-value { color: var(--led-auto); text-shadow: 0 0 5px rgba(191, 0, 255, 0.5); }
+
+        /* --- RIGHT SIDE --- */
+        .right-section {
+            border-left: 2px solid #222; padding-left: 30px;
+            display: flex; flex-direction: column; gap: 15px;
+        }
+
+        .options-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; flex-grow: 1; }
+        
+        .opt-btn {
+            background: transparent; border: 1px solid #222; color: var(--text-gray);
+            font-size: 0.8rem; border-radius: 8px; cursor: pointer; transition: 0.3s;
+        }
+        .opt-btn.active { 
+            border-color: var(--led-blue); color: var(--led-blue); 
+            box-shadow: inset 0 0 10px rgba(0, 229, 255, 0.2); 
+        }
+        .panel.auto-mode .opt-btn.active { border-color: var(--led-auto); color: var(--led-auto); }
+
+        .control-row { display: flex; justify-content: space-between; align-items: center; padding-top: 10px; }
+        
+        .icon-btn {
+            background: #1a1a1a; border: none; color: white; width: 65px; height: 65px;
+            border-radius: 50%; font-size: 1.5rem; cursor: pointer; box-shadow: 0 5px 15px rgba(0,0,0,0.5); transition: 0.2s;
+        }
+        .icon-btn:active { transform: scale(0.95); box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .play-btn { color: var(--led-blue); font-size: 2rem; }
+
+        /* --- OVERLAYS --- */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(10, 10, 10, 0.98); z-index: 100;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            transition: 0.5s; backdrop-filter: blur(10px);
+        }
+        .hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+
+        .start-btn {
+            font-size: 1.5rem; color: var(--led-blue); border: 2px solid var(--led-blue);
+            padding: 15px 40px; border-radius: 50px; cursor: pointer; animation: pulse 2s infinite;
+        }
+        
+        .back-btn {
+            position: absolute; top: 40px; left: 40px;
+            color: #666; font-size: 1rem; font-weight: bold;
+            cursor: pointer; border: 1px solid #333; padding: 10px 20px;
+            border-radius: 30px; transition: 0.3s; text-transform: uppercase;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .back-btn:hover {
+            color: var(--text-light); border-color: #666; background: rgba(255,255,255,0.05);
+        }
+
+        .select-container { display: flex; gap: 20px; }
+        .mode-card {
+            background: #222; width: 220px; height: 240px; border-radius: 20px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border: 2px solid #333; cursor: pointer; transition: 0.3s;
+        }
+        .mode-card:hover { transform: translateY(-5px); border-color: #555; }
+        .card-auto:hover { border-color: var(--led-auto); box-shadow: 0 0 30px rgba(191, 0, 255, 0.2); }
+        .card-manual:hover { border-color: var(--led-blue); box-shadow: 0 0 30px rgba(0, 210, 255, 0.2); }
+
+        @keyframes pulse { 0% { opacity: 0.7; } 50% { opacity: 1; } 100% { opacity: 0.7; } }
+        .disabled-ui { opacity: 0.5; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+<div class="panel" id="mainPanel">
+    
+    <div id="startScreen" class="overlay">
+        <h1 style="font-weight: 300; margin-bottom: 30px; letter-spacing: 2px;">Welcome</h1>
+        <div class="start-btn" onclick="emit('togglePower')">⏻ Begin</div>
+    </div>
+
+    <div id="selectScreen" class="overlay hidden">
+        <div class="back-btn" onclick="emit('togglePower')"><span>←</span> Back</div>
+        <h2 style="font-weight: 300; margin-bottom: 40px;">Select Mode</h2>
+        <div class="select-container">
+            <div class="mode-card card-auto" onclick="emit('selectStartMode', 'AUTO')">
+                <div style="font-size: 3rem; color: var(--led-auto); margin-bottom:10px;">✨</div>
+                <h3>AI Auto</h3>
+                <p style="color:#777; font-size:0.8rem;">Smart Sensors</p>
+            </div>
+            <div class="mode-card card-manual" onclick="emit('selectStartMode', 'MANUAL')">
+                <div style="font-size: 3rem; color: var(--led-blue); margin-bottom:10px;">⚙️</div>
+                <h3>Manual</h3>
+                <p style="color:#777; font-size:0.8rem;">Custom Control</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="left-section">
+        <div class="lcd-area">
+            <div class="lcd-top-row">
+                <div class="status-text" id="statusText">Ready</div>
+                <div class="timer-box" id="timer">--:--</div>
+            </div>
+            <div class="progress-track">
+                <div class="progress-fill" id="progBar"></div>
+            </div>
+        </div>
+
+        <div class="settings-grid" id="sliderGroup">
+            <div class="col">
+                <div class="setting-value" id="val-temp">--</div>
+                <input type="range" orient="vertical" min="0" max="2" step="1" id="in-temp" 
+                       oninput="sendSetting('temp', this.value)">
+                <div class="setting-label">Temp</div>
+            </div>
+            <div class="col">
+                <div class="setting-value" id="val-rinse">--</div>
+                <input type="range" orient="vertical" min="0" max="4" step="1" id="in-rinse" 
+                       oninput="sendSetting('rinse', this.value)">
+                <div class="setting-label">Rinse</div>
+            </div>
+            <div class="col">
+                <div class="setting-value" id="val-spin">--</div>
+                <input type="range" orient="vertical" min="0" max="3" step="1" id="in-spin" 
+                       oninput="sendSetting('spin', this.value)">
+                <div class="setting-label">Spin</div>
+            </div>
+            <div class="col">
+                <div class="setting-value" id="val-soil">--</div>
+                <input type="range" orient="vertical" min="0" max="3" step="1" id="in-soil" 
+                       oninput="sendSetting('soil', this.value)">
+                <div class="setting-label">Soil</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="right-section">
+        
+        <div class="options-grid" id="optGroup">
+            <button class="opt-btn" id="btn-preSoak" onclick="emit('toggleOption', 'preSoak')">Pre Soak</button>
+            <button class="opt-btn" id="btn-delayEnd" onclick="emit('toggleOption', 'delayEnd')">Delay End</button>
+            <button class="opt-btn" id="btn-steam" onclick="emit('toggleOption', 'steam')">Steam</button>
+            <button class="opt-btn" id="btn-drumLight" onclick="emit('toggleOption', 'drumLight')">Light</button>
+            <button class="opt-btn" id="btn-superSpeed" onclick="emit('toggleOption', 'superSpeed')">Speed</button>
+            <button class="opt-btn" id="btn-smartControl" onclick="emit('toggleOption', 'smartControl')">Smart</button>
+        </div>
+
+        <div class="control-row">
+            <button class="icon-btn" id="btn-power" onclick="emit('togglePower')" style="color: #ff4444;">🏠</button>
+            <button class="icon-btn play-btn" onclick="emit('togglePlay')">⏯</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const socket = io();
+
+    // UPDATED LABELS: Temp has only 3 options now
+    const LABELS = {
+        temp: ["20°C", "40°C", "60°C"],
+        rinse: ["1x", "2x", "3x", "4x", "5x"],
+        spin: ["No", "Low", "Med", "High"],
+        soil: ["Light", "Med", "Hvy", "Ex.H"]
+    };
+
+    function emit(ev, data) { socket.emit(ev, data); }
+    
+    function sendSetting(type, val) {
+        document.getElementById(`val-${type}`).innerText = LABELS[type][val];
+        socket.emit('setSetting', { type: type, value: val });
+    }
+
+    socket.on('update', (machine) => {
+        const panel = document.getElementById('mainPanel');
+        const startScreen = document.getElementById('startScreen');
+        const selectScreen = document.getElementById('selectScreen');
+        const sliderGroup = document.getElementById('sliderGroup');
+        const optGroup = document.getElementById('optGroup');
+        const progBar = document.getElementById('progBar');
+        const powerBtn = document.getElementById('btn-power'); 
+
+        // --- SCREEN FLOW ---
+        if (!machine.power) {
+            startScreen.classList.remove('hidden');
+            selectScreen.classList.add('hidden');
+            return; 
+        } else if (!machine.setupComplete) {
+            startScreen.classList.add('hidden');
+            selectScreen.classList.remove('hidden');
+        } else {
+            startScreen.classList.add('hidden');
+            selectScreen.classList.add('hidden');
+        }
+
+        // --- DASHBOARD ---
+        const isAuto = machine.mode === 'AUTO';
+        
+        // Reset visibility/state
+        sliderGroup.classList.remove('disabled-ui');
+        optGroup.classList.remove('disabled-ui');
+
+        if(isAuto) {
+            panel.classList.add('auto-mode');
+            sliderGroup.classList.add('disabled-ui');
+            optGroup.classList.add('disabled-ui');
+        } else {
+            panel.classList.remove('auto-mode');
+        }
+
+        if(machine.isRunning) {
+            // LOCK CONTROLS
+            sliderGroup.classList.add('disabled-ui');
+            optGroup.classList.add('disabled-ui');
+        }
+
+        // Update Text
+        document.getElementById('statusText').innerText = machine.status;
+        const m = Math.floor(machine.timeLeft / 60);
+        const s = machine.timeLeft % 60;
+        document.getElementById('timer').innerText = `${m}:${s.toString().padStart(2,'0')}`;
+
+        // Update Progress Bar
+        let percent = 0;
+        if(machine.totalDuration > 0) {
+            percent = ((machine.totalDuration - machine.timeLeft) / machine.totalDuration) * 100;
+        }
+        if(machine.status === "END") percent = 100;
+        if(machine.status === "READY" || machine.status === "OFF") percent = 0;
+        progBar.style.width = `${percent}%`;
+
+        // Sync Sliders & Labels
+        Object.keys(machine.settings).forEach(type => {
+            const val = machine.settings[type];
+            const input = document.getElementById(`in-${type}`);
+            if (document.activeElement !== input) {
+                input.value = val;
+            }
+            document.getElementById(`val-${type}`).innerText = LABELS[type][val];
+        });
+
+        // Sync Option Buttons
+        Object.keys(machine.options).forEach(opt => {
+            const btn = document.getElementById(`btn-${opt}`);
+            if (machine.options[opt]) btn.classList.add('active'); else btn.classList.remove('active');
+        });
+    });
+</script>
+</body>
+</html> 
+

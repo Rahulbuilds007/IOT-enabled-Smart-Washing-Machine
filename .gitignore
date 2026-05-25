@@ -1,0 +1,14 @@
+# Node
+node_modules/
+
+# Python
+tb_env/
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db
+
+# temp
+*.swp
